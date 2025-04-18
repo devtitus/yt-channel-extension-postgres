@@ -15,6 +15,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  min-width: 80px;
+  white-space: nowrap;
+  letter-spacing: normal;
 }
 
 .yt-extension-btn:hover {
@@ -85,4 +88,19 @@
     transform: translateY(-100%);
     opacity: 0;
   }
+}
+
+/* Video page specific styles */
+#owner .yt-extension-btn {
+  margin-right: 8px;
+  font-size: 13px;
+  padding: 6px 12px;
+  height: 32px;
+}
+
+.yt-watch-buttons-container {
+  display: flex;
+  margin-top: 8px;
+  flex-wrap: wrap;
+  gap: 8px;
 }

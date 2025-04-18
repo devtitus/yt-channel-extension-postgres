@@ -13,7 +13,13 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["inject.js", "styles.css", "data-extractor.js"],
+      "resources": [
+        "inject.js",
+        "styles.css",
+        "data-extractor.js",
+        "toastify.min.js",
+        "toastify.min.css"
+      ],
       "matches": ["https://www.youtube.com/*"]
     }
   ],

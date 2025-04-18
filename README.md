@@ -19,6 +19,15 @@ A browser extension that finds YouTube channel IDs and adds them to a PostgreSQL
     └── styles.css
 ```
 
+## Features
+
+- Works on both YouTube channel pages and video pages
+- Automatically detects page navigation without requiring refresh
+- Extracts channel IDs from various YouTube page types
+- Copy button to easily copy channel IDs to clipboard
+- Toast notifications with success/error feedback
+- Database integration for storing channel IDs
+
 ## Setup Instructions
 
 ### Prerequisites
@@ -117,20 +126,25 @@ A browser extension that finds YouTube channel IDs and adds them to a PostgreSQL
 
 ## Usage
 
-1. Navigate to any YouTube channel page (URLs starting with `youtube.com/channel/`, `youtube.com/c/`, or `youtube.com/@username`)
+1. Navigate to any YouTube channel page (URLs starting with `youtube.com/channel/`, `youtube.com/c/`, or `youtube.com/@username`) or video page (youtube.com/watch)
 
 2. The extension will display two buttons:
 
-   - **Find ID**: Shows the channel's unique identifier
+   - **Find ID**: Shows the channel's unique identifier with a copy button
    - **Add to DB**: Adds the channel ID to your PostgreSQL database
 
-3. When you click "Add to DB", the extension sends the channel ID to your local API server, which adds it to the database.
+3. When you click "Find ID", a toast notification will appear showing the channel ID with a copy button
+
+4. When you click "Add to DB", the extension sends the channel ID to your local API server, which adds it to the database.
+
+5. You can navigate between videos and channel pages without refreshing - the buttons will automatically appear on the new page
 
 ## Troubleshooting
 
-- **Extension buttons don't appear**: Refresh the YouTube page or navigate to a different channel
+- **Extension buttons don't appear**: Refresh the YouTube page or try navigating to a different video/channel
 - **API connection errors**: Check if your backend server is running on port 3000
 - **Database errors**: Verify your PostgreSQL connection details in the `.env` file
+- **Channel ID not found**: Some channels might use custom handles that make ID extraction difficult
 
 ## Development
 

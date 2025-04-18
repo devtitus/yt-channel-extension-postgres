@@ -67,6 +67,19 @@ function getChannelIdFromMeta() {
         }
     }
 
+    // Method 7: For video watch pages, extract from videoOwnerRenderer
+    if (window.location.pathname === '/watch') {
+        try {
+            if (window.ytInitialData && window.ytInitialData.contents) {
+                const videoData = JSON.stringify(window.ytInitialData.contents);
+                const ownerMatch = videoData.match(/"videoOwnerChannelId":"(UC[a-zA-Z0-9_-]{22})"/);
+                if (ownerMatch && ownerMatch[1]) return ownerMatch[1];
+            }
+        } catch (e) {
+            console.error('Error extracting video owner channel ID:', e);
+        }
+    }
+
     return null;
 }
 
@@ -81,6 +94,17 @@ function extractIdFromPageData() {
             // Try header channel renderer
             const headerChannelId = window.ytInitialData?.header?.c4TabbedHeaderRenderer?.channelId;
             if (headerChannelId && headerChannelId.startsWith('UC')) return headerChannelId;
+
+            // For watch pages, try to get the video owner's channel ID
+            if (window.location.pathname === '/watch') {
+                const videoData = window.ytInitialData.contents?.twoColumnWatchNextResults?.results?.results?.contents || [];
+                for (const content of videoData) {
+                    if (content?.videoSecondaryInfoRenderer?.owner?.videoOwnerRenderer?.navigationEndpoint?.browseEndpoint?.browseId) {
+                        const channelId = content.videoSecondaryInfoRenderer.owner.videoOwnerRenderer.navigationEndpoint.browseEndpoint.browseId;
+                        if (channelId.startsWith('UC')) return channelId;
+                    }
+                }
+            }
         }
 
         // Try to get from other potential YouTube data objects
@@ -123,38 +147,256 @@ function getChannelIdForCustomUrl() {
     return null;
 }
 
-// Create toast notification function
-function showToast(message, type = 'info') {
-    // Remove existing toasts
-    const existingToasts = document.querySelectorAll('.yt-ext-toast');
-    existingToasts.forEach(toast => toast.remove());
+// Special function to extract video owner channel ID
+function getVideoOwnerChannelId() {
+    // Only relevant for watch pages
+    if (window.location.pathname !== '/watch') return null;
 
-    // Create new toast
+    try {
+        // Method 1: Direct from localStorage (set by our data-extractor.js)
+        const storedId = localStorage.getItem('yt-extension-channel-id');
+        if (storedId && storedId.startsWith('UC')) return storedId;
+
+        // Method 2: From ytInitialData
+        if (window.ytInitialData?.contents?.twoColumnWatchNextResults?.results?.results?.contents) {
+            const contents = window.ytInitialData.contents.twoColumnWatchNextResults.results.results.contents;
+
+            // Check each content block
+            for (const content of contents) {
+                // Most common location
+                if (content?.videoSecondaryInfoRenderer?.owner?.videoOwnerRenderer?.navigationEndpoint?.browseEndpoint?.browseId) {
+                    const id = content.videoSecondaryInfoRenderer.owner.videoOwnerRenderer.navigationEndpoint.browseEndpoint.browseId;
+                    if (id.startsWith('UC')) return id;
+                }
+
+                // Alternative location
+                if (content?.videoPrimaryInfoRenderer?.owner?.videoOwnerRenderer?.navigationEndpoint?.browseEndpoint?.browseId) {
+                    const id = content.videoPrimaryInfoRenderer.owner.videoOwnerRenderer.navigationEndpoint.browseEndpoint.browseId;
+                    if (id.startsWith('UC')) return id;
+                }
+            }
+        }
+
+        // Method 3: Parse from channel link in the DOM
+        const ownerLink = document.querySelector('#owner a[href*="channel/"], #owner a[href*="/@"]');
+        if (ownerLink) {
+            const href = ownerLink.getAttribute('href');
+            // Direct channel link
+            const channelMatch = href.match(/\/channel\/(UC[a-zA-Z0-9_-]{22})/);
+            if (channelMatch && channelMatch[1]) return channelMatch[1];
+
+            // If it's a handle link, we need to click and extract, but this is complicated
+            // This part might not work consistently
+        }
+
+        // Method 4: Search in scripts
+        const scripts = document.querySelectorAll('script');
+        for (const script of scripts) {
+            if (script.textContent.includes('"videoOwnerChannelId"')) {
+                const match = script.textContent.match(/"videoOwnerChannelId":"(UC[a-zA-Z0-9_-]{22})"/);
+                if (match && match[1]) return match[1];
+            }
+        }
+
+        // Method 5: Check microdata
+        const microdata = document.querySelector('[itemprop="channelId"]');
+        if (microdata && microdata.content && microdata.content.startsWith('UC')) {
+            return microdata.content;
+        }
+    } catch (e) {
+        console.error('Error extracting video owner channel ID:', e);
+    }
+
+    return null;
+}
+
+// Simple custom toast notification function that works with YouTube's CSP
+function showToast(message, type = 'info', channelId = null) {
+    // Remove any existing toasts
+    const existingToasts = document.querySelectorAll('.yt-ext-toast-container');
+    existingToasts.forEach(toast => {
+        if (toast && toast.parentNode) {
+            toast.parentNode.removeChild(toast);
+        }
+    });
+
+    // Create toast container
     const toast = document.createElement('div');
-    toast.className = `yt-ext-toast yt-ext-toast-${type}`;
-    toast.textContent = message;
+    toast.className = 'yt-ext-toast-container';
 
-    // Add to document
-    document.body.appendChild(toast);
+    // Set styles based on type
+    let backgroundColor;
+    switch (type) {
+        case 'success':
+            backgroundColor = 'rgba(46, 125, 50, 0.9)';
+            break;
+        case 'error':
+            backgroundColor = 'rgba(198, 40, 40, 0.9)';
+            break;
+        default: // info
+            backgroundColor = 'rgba(33, 33, 33, 0.9)';
+    }
 
-    // Remove toast after animation completes
-    setTimeout(() => {
+    // Apply styles
+    Object.assign(toast.style, {
+        position: 'fixed',
+        top: '20px',
+        right: '20px',
+        zIndex: '9999',
+        backgroundColor: backgroundColor,
+        color: 'white',
+        padding: '12px 16px',
+        borderRadius: '4px',
+        fontFamily: '"Roboto", "Arial", sans-serif',
+        fontSize: '14px',
+        maxWidth: '400px',
+        boxShadow: '0 3px 6px rgba(0, 0, 0, 0.16)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between'
+    });
+
+    // Create content
+    const contentDiv = document.createElement('div');
+    contentDiv.style.display = 'flex';
+    contentDiv.style.alignItems = 'center';
+    contentDiv.style.gap = '8px';
+    contentDiv.style.flexGrow = '1';
+
+    // Create text span
+    const textSpan = document.createElement('span');
+    textSpan.textContent = message;
+    contentDiv.appendChild(textSpan);
+
+    // Add copy button if channel ID is provided
+    if (channelId) {
+        const copyBtn = document.createElement('button');
+        copyBtn.textContent = 'Copy';
+        Object.assign(copyBtn.style, {
+            padding: '4px 8px',
+            borderRadius: '4px',
+            backgroundColor: '#ffffff',
+            color: '#000000',
+            border: 'none',
+            cursor: 'pointer',
+            fontSize: '12px',
+            fontWeight: '500',
+            marginLeft: '8px'
+        });
+
+        copyBtn.onclick = (e) => {
+            e.stopPropagation();
+
+            // Copy channel ID to clipboard
+            navigator.clipboard.writeText(channelId)
+                .then(() => {
+                    copyBtn.textContent = '✓ Copied';
+                    setTimeout(() => {
+                        copyBtn.textContent = 'Copy';
+                    }, 2000);
+                })
+                .catch(err => {
+                    console.error('Failed to copy text: ', err);
+                    copyBtn.textContent = 'Failed';
+                    setTimeout(() => {
+                        copyBtn.textContent = 'Copy';
+                    }, 2000);
+                });
+        };
+
+        contentDiv.appendChild(copyBtn);
+    }
+
+    toast.appendChild(contentDiv);
+
+    // Create close button
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = '×';
+    Object.assign(closeBtn.style, {
+        backgroundColor: 'transparent',
+        border: 'none',
+        color: 'white',
+        cursor: 'pointer',
+        fontSize: '20px',
+        fontWeight: 'bold',
+        marginLeft: '8px',
+        padding: '0 5px',
+        lineHeight: '1'
+    });
+
+    closeBtn.onclick = () => {
         if (toast.parentNode) {
             toast.parentNode.removeChild(toast);
         }
-    }, 3000);
+    };
+
+    toast.appendChild(closeBtn);
+
+    // Add to body
+    document.body.appendChild(toast);
+
+    // Auto-hide after 5 seconds
+    setTimeout(() => {
+        if (toast.parentNode) {
+            // Fade out
+            toast.style.opacity = '0';
+            toast.style.transition = 'opacity 0.5s ease';
+
+            // Remove after animation
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.parentNode.removeChild(toast);
+                }
+            }, 500);
+        }
+    }, 5000);
 
     return toast;
 }
 
-function insertButtons() {
-    // Find the parent container with YouTube action buttons
-    // Try multiple selectors for different YouTube layouts
-    const buttonContainer = document.querySelector('yt-flexible-actions-view-model') ||
-        document.querySelector('ytd-c4-tabbed-header-renderer #buttons') ||
-        document.querySelector('.page-header .buttons-container');
+// Store the current location to detect navigation
+let currentLocation = window.location.href;
 
-    if (!buttonContainer || document.getElementById('yt-ext-find')) return;
+// Function to clean up existing buttons before re-adding them
+function cleanUpButtons() {
+    // Remove any existing buttons to prevent duplicates
+    const existingButtons = document.querySelectorAll('#yt-ext-find, #yt-ext-add');
+    existingButtons.forEach(button => {
+        if (button && button.parentNode) {
+            // If the button is inside our wrapper, remove the whole wrapper
+            const wrapper = button.closest('.yt-watch-buttons-container, .yt-flexible-actions-view-model-wiz__action');
+            if (wrapper && wrapper.parentNode) {
+                wrapper.parentNode.removeChild(wrapper);
+            } else if (button.parentNode) {
+                // Otherwise just remove the button
+                button.parentNode.removeChild(button);
+            }
+        }
+    });
+}
+
+function insertButtons() {
+    // Clean up existing buttons first
+    cleanUpButtons();
+
+    let buttonContainer = null;
+    let watchPage = false;
+
+    // Check if we're on a watch page
+    if (window.location.pathname === '/watch') {
+        watchPage = true;
+        // Try to find the owner container in watch page
+        buttonContainer = document.querySelector('#owner #upload-info') ||
+            document.querySelector('#owner.ytd-watch-metadata') ||
+            document.querySelector('#owner');
+    } else {
+        // For channel pages, use existing selectors
+        buttonContainer = document.querySelector('yt-flexible-actions-view-model') ||
+            document.querySelector('ytd-c4-tabbed-header-renderer #buttons') ||
+            document.querySelector('.page-header .buttons-container');
+    }
+
+    if (!buttonContainer) return;
 
     // Create Find ID button
     const findBtn = document.createElement('button');
@@ -171,14 +413,20 @@ function insertButtons() {
     let currentChannelId = null;
 
     findBtn.onclick = () => {
-        // Try all available methods to find the channel ID
-        currentChannelId = localStorage.getItem('yt-extension-channel-id') ||
-            getChannelIdForCustomUrl() ||
-            extractIdFromPageData() ||
-            getChannelIdFromMeta();
+        // Try different methods based on page type
+        if (window.location.pathname === '/watch') {
+            // For video pages, use specialized function
+            currentChannelId = getVideoOwnerChannelId();
+        } else {
+            // For channel pages, use existing methods
+            currentChannelId = localStorage.getItem('yt-extension-channel-id') ||
+                getChannelIdForCustomUrl() ||
+                extractIdFromPageData() ||
+                getChannelIdFromMeta();
+        }
 
         if (currentChannelId) {
-            showToast(`Channel ID: ${currentChannelId}`, 'info');
+            showToast(`Channel ID: ${currentChannelId}`, 'info', currentChannelId);
         } else {
             showToast('Channel ID not found.', 'error');
         }
@@ -187,10 +435,16 @@ function insertButtons() {
     addBtn.onclick = () => {
         if (!currentChannelId) {
             // Try to get the ID if not already set
-            currentChannelId = localStorage.getItem('yt-extension-channel-id') ||
-                getChannelIdForCustomUrl() ||
-                extractIdFromPageData() ||
-                getChannelIdFromMeta();
+            if (window.location.pathname === '/watch') {
+                // For video pages, use specialized function
+                currentChannelId = getVideoOwnerChannelId();
+            } else {
+                // For channel pages, use existing methods
+                currentChannelId = localStorage.getItem('yt-extension-channel-id') ||
+                    getChannelIdForCustomUrl() ||
+                    extractIdFromPageData() ||
+                    getChannelIdFromMeta();
+            }
 
             if (!currentChannelId) {
                 showToast('Channel ID not found. Please click "Find ID" first!', 'error');
@@ -204,14 +458,21 @@ function insertButtons() {
             body: JSON.stringify({ channelId: currentChannelId })
         })
             .then(res => res.json())
-            .then(data => showToast(data.message, data.message === 'Inserted' ? 'success' : 'info'))
+            .then(data => showToast(data.message, data.message === 'Inserted' ? 'success' : 'info', currentChannelId))
             .catch(() => showToast('Error inserting to DB.', 'error'));
     };
 
-    // Create a container for our buttons to match YouTube's styling
+    // Create a container for our buttons
     const buttonsWrapper = document.createElement('div');
-    buttonsWrapper.className = 'yt-flexible-actions-view-model-wiz__action';
-    buttonsWrapper.style.display = 'flex';
+
+    if (watchPage) {
+        // Use specific container class for watch page
+        buttonsWrapper.className = 'yt-watch-buttons-container';
+    } else {
+        // Use the existing styling for channel pages
+        buttonsWrapper.className = 'yt-flexible-actions-view-model-wiz__action';
+        buttonsWrapper.style.display = 'flex';
+    }
 
     // Inject the buttons
     buttonsWrapper.appendChild(findBtn);
@@ -219,8 +480,54 @@ function insertButtons() {
     buttonContainer.appendChild(buttonsWrapper);
 }
 
+// Watch for URL changes
+function checkForUrlChanges() {
+    if (currentLocation !== window.location.href) {
+        // URL has changed
+        console.log('YouTube page navigation detected:', window.location.href);
+        currentLocation = window.location.href;
+
+        // Wait a bit for the DOM to update with new page content
+        setTimeout(() => {
+            // Re-initialize buttons on the new page
+            insertButtons();
+        }, 1000); // 1 second delay
+    }
+
+    // Continue checking periodically
+    setTimeout(checkForUrlChanges, 500);
+}
+
+// Start checking for URL changes
+checkForUrlChanges();
+
+// Watch for page data updates from YouTube's own events
+document.addEventListener('yt-page-data-updated', function () {
+    console.log('YouTube page data updated event detected');
+    setTimeout(insertButtons, 500);
+}, true);
+
 // Watch for dynamic DOM changes
-new MutationObserver(insertButtons).observe(document.body, {
+new MutationObserver(mutations => {
+    // Look specifically for changes that might contain the owner info on watch pages
+    const hasOwnerInfo = mutations.some(mutation => {
+        return Array.from(mutation.addedNodes).some(node => {
+            return node.id === 'owner' ||
+                (node.querySelector && node.querySelector('#owner')) ||
+                (window.location.pathname === '/watch' &&
+                    (node.id === 'meta' || (node.querySelector && node.querySelector('#meta'))));
+        });
+    });
+
+    if (hasOwnerInfo || mutations.length > 5) {
+        insertButtons();
+    }
+}).observe(document.body, {
     childList: true,
     subtree: true
 });
+
+// Also try to insert buttons on initial page load
+window.addEventListener('load', insertButtons);
+// And try immediately in case the page is already loaded
+setTimeout(insertButtons, 500);
