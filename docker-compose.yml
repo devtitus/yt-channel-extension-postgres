@@ -1,0 +1,20 @@
+
+services:
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: youtube-channel-id-api
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PGHOST=${PGHOST}
+      - PGPORT=${PGPORT}
+      - PGUSER=${PGUSER}
+      - PGPASSWORD=${PGPASSWORD}
+      - PGDATABASE=${PGDATABASE}
+    restart: unless-stopped
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
