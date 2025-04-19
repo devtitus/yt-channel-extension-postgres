@@ -37,7 +37,7 @@ window.addEventListener('yt-page-data-updated', function () {
                     }
                 }
             } catch (e) {
-                console.error("Error extracting video owner channel ID:", e);
+                // Silent error handling in production
             }
         }
 
@@ -88,7 +88,7 @@ if (window.ytInitialData) {
                 }
             }
         } catch (e) {
-            console.error("Error extracting video owner channel ID:", e);
+            // Silent error handling in production
         }
     }
 

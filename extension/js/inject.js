@@ -153,6 +153,25 @@ function getVideoOwnerChannelId() {
     if (window.location.pathname !== '/watch') return null;
 
     try {
+        // Method 0: Check the About link directly (NEW METHOD)
+        const aboutLink = document.querySelector('a[href*="/channel/"][href*="/about"], a.yt-spec-button-shape-next[href*="/channel/"]');
+        if (aboutLink) {
+            const href = aboutLink.getAttribute('href');
+            const channelMatch = href.match(/\/channel\/(UC[a-zA-Z0-9_-]{22})/);
+            if (channelMatch && channelMatch[1]) {
+                // Store this ID for future use
+                const newChannelId = channelMatch[1];
+
+                // Compare with previously stored ID
+                const storedId = localStorage.getItem('yt-extension-channel-id');
+                if (storedId !== newChannelId) {
+                    localStorage.setItem('yt-extension-channel-id', newChannelId);
+                }
+
+                return newChannelId;
+            }
+        }
+
         // Method 1: Direct from localStorage (set by our data-extractor.js)
         const storedId = localStorage.getItem('yt-extension-channel-id');
         if (storedId && storedId.startsWith('UC')) return storedId;
@@ -296,7 +315,6 @@ function showToast(message, type = 'info', channelId = null) {
                     }, 2000);
                 })
                 .catch(err => {
-                    console.error('Failed to copy text: ', err);
                     copyBtn.textContent = 'Failed';
                     setTimeout(() => {
                         copyBtn.textContent = 'Copy';
@@ -379,22 +397,15 @@ function insertButtons() {
     // Clean up existing buttons first
     cleanUpButtons();
 
-    let buttonContainer = null;
-    let watchPage = false;
+    // Only inject buttons on watch pages
+    if (window.location.pathname !== '/watch') return;
 
-    // Check if we're on a watch page
-    if (window.location.pathname === '/watch') {
-        watchPage = true;
-        // Try to find the owner container in watch page
-        buttonContainer = document.querySelector('#owner #upload-info') ||
-            document.querySelector('#owner.ytd-watch-metadata') ||
-            document.querySelector('#owner');
-    } else {
-        // For channel pages, use existing selectors
-        buttonContainer = document.querySelector('yt-flexible-actions-view-model') ||
-            document.querySelector('ytd-c4-tabbed-header-renderer #buttons') ||
-            document.querySelector('.page-header .buttons-container');
-    }
+    let buttonContainer = null;
+
+    // Try to find the owner container in watch page
+    buttonContainer = document.querySelector('#owner #upload-info') ||
+        document.querySelector('#owner.ytd-watch-metadata') ||
+        document.querySelector('#owner');
 
     if (!buttonContainer) return;
 
@@ -413,17 +424,8 @@ function insertButtons() {
     let currentChannelId = null;
 
     findBtn.onclick = () => {
-        // Try different methods based on page type
-        if (window.location.pathname === '/watch') {
-            // For video pages, use specialized function
-            currentChannelId = getVideoOwnerChannelId();
-        } else {
-            // For channel pages, use existing methods
-            currentChannelId = localStorage.getItem('yt-extension-channel-id') ||
-                getChannelIdForCustomUrl() ||
-                extractIdFromPageData() ||
-                getChannelIdFromMeta();
-        }
+        // For video pages, use specialized function
+        currentChannelId = getVideoOwnerChannelId();
 
         if (currentChannelId) {
             showToast(`Channel ID: ${currentChannelId}`, 'info', currentChannelId);
@@ -435,16 +437,7 @@ function insertButtons() {
     addBtn.onclick = () => {
         if (!currentChannelId) {
             // Try to get the ID if not already set
-            if (window.location.pathname === '/watch') {
-                // For video pages, use specialized function
-                currentChannelId = getVideoOwnerChannelId();
-            } else {
-                // For channel pages, use existing methods
-                currentChannelId = localStorage.getItem('yt-extension-channel-id') ||
-                    getChannelIdForCustomUrl() ||
-                    extractIdFromPageData() ||
-                    getChannelIdFromMeta();
-            }
+            currentChannelId = getVideoOwnerChannelId();
 
             if (!currentChannelId) {
                 showToast('Channel ID not found. Please click "Find ID" first!', 'error');
@@ -452,27 +445,57 @@ function insertButtons() {
             }
         }
 
-        fetch('http://localhost:3000/api/add-channel', {
+        // Show a loading toast
+        const loadingToast = showToast(`Sending channel ID ${currentChannelId} to database...`, 'info');
+
+        // Create the request data
+        const requestData = {
+            channelId: currentChannelId
+        };
+
+        // API url
+        const apiUrl = 'http://localhost:3000/api/add-channel';
+
+        fetch(apiUrl, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ channelId: currentChannelId })
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify(requestData)
         })
-            .then(res => res.json())
-            .then(data => showToast(data.message, data.message === 'Inserted' ? 'success' : 'info', currentChannelId))
-            .catch(() => showToast('Error inserting to DB.', 'error'));
+            .then(res => {
+                if (!res.ok) {
+                    return res.json().then(errorData => {
+                        throw new Error(errorData.message || `Server error: ${res.status}`);
+                    }).catch(err => {
+                        // If JSON parsing fails, throw the original error
+                        throw new Error(`Server error: ${res.status}`);
+                    });
+                }
+                return res.json();
+            })
+            .then(data => {
+                // Remove loading toast if exists
+                if (loadingToast && loadingToast.parentNode) {
+                    loadingToast.parentNode.removeChild(loadingToast);
+                }
+                showToast(data.message, data.message === 'Inserted' ? 'success' : 'info', currentChannelId);
+            })
+            .catch(error => {
+                // Remove loading toast if exists
+                if (loadingToast && loadingToast.parentNode) {
+                    loadingToast.parentNode.removeChild(loadingToast);
+                }
+                // Show a friendlier error message
+                showToast(`Database error: ${error.message}. Please check if your backend server is running.`, 'error');
+            });
     };
+
 
     // Create a container for our buttons
     const buttonsWrapper = document.createElement('div');
-
-    if (watchPage) {
-        // Use specific container class for watch page
-        buttonsWrapper.className = 'yt-watch-buttons-container';
-    } else {
-        // Use the existing styling for channel pages
-        buttonsWrapper.className = 'yt-flexible-actions-view-model-wiz__action';
-        buttonsWrapper.style.display = 'flex';
-    }
+    buttonsWrapper.className = 'yt-watch-buttons-container';
 
     // Inject the buttons
     buttonsWrapper.appendChild(findBtn);
@@ -484,7 +507,6 @@ function insertButtons() {
 function checkForUrlChanges() {
     if (currentLocation !== window.location.href) {
         // URL has changed
-        console.log('YouTube page navigation detected:', window.location.href);
         currentLocation = window.location.href;
 
         // Wait a bit for the DOM to update with new page content
@@ -503,7 +525,6 @@ checkForUrlChanges();
 
 // Watch for page data updates from YouTube's own events
 document.addEventListener('yt-page-data-updated', function () {
-    console.log('YouTube page data updated event detected');
     setTimeout(insertButtons, 500);
 }, true);
 

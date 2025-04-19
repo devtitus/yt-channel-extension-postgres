@@ -1,6 +1,6 @@
 # YouTube Channel ID Extension
 
-A browser extension that finds YouTube channel IDs and adds them to a PostgreSQL database for further processing.
+A browser extension that finds YouTube channel IDs from YouTube video pages and adds them to a PostgreSQL database for further processing and analysis.
 
 ## Project Structure
 
@@ -12,21 +12,31 @@ A browser extension that finds YouTube channel IDs and adds them to a PostgreSQL
 │   ├── server.js
 │   └── .env
 └── extension/
-    ├── content.js
-    ├── data-extractor.js
-    ├── inject.js
     ├── manifest.json
-    └── styles.css
+    ├── assets/
+    ├── css/
+    │   └── styles.css
+    └── js/
+        ├── content.js
+        ├── data-extractor.js
+        └── inject.js
 ```
 
 ## Features
 
-- Works on both YouTube channel pages and video pages
-- Automatically detects page navigation without requiring refresh
-- Extracts channel IDs from various YouTube page types
+- Seamlessly extracts YouTube channel IDs from video pages using multiple robust methods:
+  - From the "About" link near the video player
+  - From localStorage for persistent tracking between page views
+  - From YouTube's internal data structures as fallback
+  - Handles custom URLs (e.g., /@username) and dynamic navigation
+- Automatically detects page navigation and updates UI without requiring a page refresh
+- UI buttons (**Find ID** and **Add to DB**) appear near the video creator's information
 - Copy button to easily copy channel IDs to clipboard
 - Toast notifications with success/error feedback
-- Database integration for storing channel IDs
+- Backend API integration for storing channel IDs in a PostgreSQL database
+- Backend ensures the required table exists before inserting and provides a health check endpoint
+- Docker Compose support for easy backend deployment
+- Secure environment variable usage for database credentials
 
 ## Setup Instructions
 
@@ -109,26 +119,24 @@ A browser extension that finds YouTube channel IDs and adds them to a PostgreSQL
    - Click on "Load unpacked"
    - Select the `extension` folder from this project
 
-   ![Chrome extension loading](https://developer.chrome.com/docs/extensions/mv3/getstarted/extensions-interface.png)
-
 2. **Verify Installation**:
 
    - The extension should appear in your extensions list
-   - You will see the extension icon in your browser toolbar
+   - Navigate to any YouTube video page to see the extension in action
 
 3. **Configuration**:
 
    The extension is pre-configured to connect to `http://localhost:3000`. If you need to change this:
 
-   - Open `extension/inject.js`
+   - Open `extension/js/inject.js`
    - Find the `fetch` function call
    - Update the URL to your API endpoint
 
 ## Usage
 
-1. Navigate to any YouTube channel page (URLs starting with `youtube.com/channel/`, `youtube.com/c/`, or `youtube.com/@username`) or video page (youtube.com/watch)
+1. Navigate to any YouTube video page (URLs starting with `youtube.com/watch`)
 
-2. The extension will display two buttons:
+2. The extension will display two buttons near the video creator's information:
 
    - **Find ID**: Shows the channel's unique identifier with a copy button
    - **Add to DB**: Adds the channel ID to your PostgreSQL database
@@ -137,14 +145,21 @@ A browser extension that finds YouTube channel IDs and adds them to a PostgreSQL
 
 4. When you click "Add to DB", the extension sends the channel ID to your local API server, which adds it to the database.
 
-5. You can navigate between videos and channel pages without refreshing - the buttons will automatically appear on the new page
+5. You can navigate between videos without refreshing - the buttons will automatically appear on the new video page
+
+## Technical Notes
+
+- The extension gets channel IDs directly from the "About" link in video pages for efficiency
+- IDs are stored in localStorage to prevent redundant extractions
+- Multiple fallback methods ensure the channel ID can be found even when the page structure changes
+- The extension does not inject buttons on channel pages to improve performance
 
 ## Troubleshooting
 
-- **Extension buttons don't appear**: Refresh the YouTube page or try navigating to a different video/channel
+- **Extension buttons don't appear**: Refresh the YouTube page or try navigating to a different video
 - **API connection errors**: Check if your backend server is running on port 3000
 - **Database errors**: Verify your PostgreSQL connection details in the `.env` file
-- **Channel ID not found**: Some channels might use custom handles that make ID extraction difficult
+- **Channel ID not found**: Some videos might use custom structures that make ID extraction difficult
 
 ## Development
 

@@ -1,0 +1,52 @@
+<svg viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle with subtle gradient -->
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="50%" r="70%" fx="50%" fy="50%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="100%" stop-color="#f8f8f8" />
+    </radialGradient>
+    <!-- Data flow animation with new gold color -->
+    <linearGradient id="dataGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#FF0000" stop-opacity="0.8" />
+      <stop offset="100%" stop-color="#F5C400" stop-opacity="0.8" />
+    </linearGradient>
+  </defs>
+  <circle cx="64" cy="64" r="60" fill="url(#bg)" stroke="#e0e0e0" stroke-width="1" />
+  
+  <!-- YouTube Logo with smaller play button -->
+  <g transform="translate(42, 52)">
+    <rect x="-14" y="-12" width="28" height="24" rx="6" fill="#FF0000" />
+    <polygon points="-1.5,-5 -1.5,5 6,0" fill="white" />
+  </g>
+  
+  <!-- Database on right - slightly farther -->
+  <g transform="translate(86, 52)">
+    <path d="M-14,-10 C-14,-14 14,-14 14,-10 L14,10 C14,14 -14,14 -14,10 Z" fill="#F5C400" />
+    <path d="M-14,-10 C-14,-6 14,-6 14,-10" stroke="#ffffff" stroke-width="1.5" fill="none" />
+    <path d="M-14,0 C-14,4 14,4 14,0" stroke="#ffffff" stroke-width="1" fill="none" opacity="0.7" />
+    <ellipse cx="0" cy="-10" rx="14" ry="4" fill="#F5C400" />
+  </g>
+  
+  <!-- Data flow arrow - thinner and light black -->
+  <g>
+    <line x1="56" y1="52" x2="72" y2="52" stroke="#444444" stroke-width="1" stroke-dasharray="1,0.5" />
+    <polygon points="72,52 70,51 70,53" fill="#444444" />
+    
+    <!-- Animated data particles -->
+    <circle cx="56" cy="52" r="1" fill="url(#dataGradient)">
+      <animate attributeName="cx" values="56;72" dur="1.5s" repeatCount="indefinite" />
+    </circle>
+    <circle cx="56" cy="52" r="0.8" fill="url(#dataGradient)">
+      <animate attributeName="cx" values="56;72" dur="1.5s" begin="0.5s" repeatCount="indefinite" />
+    </circle>
+    <circle cx="56" cy="52" r="0.6" fill="url(#dataGradient)">
+      <animate attributeName="cx" values="56;72" dur="1.5s" begin="1s" repeatCount="indefinite" />
+    </circle>
+  </g>
+  
+  <!-- UC... ID display at bottom -->
+  <g transform="translate(64, 88)">
+    <rect x="-32" y="-9" width="64" height="18" rx="9" fill="#4285F4" />
+    <text x="0" y="4" font-family="Arial, sans-serif" font-size="11" font-weight="bold" text-anchor="middle" fill="white">UC...</text>
+  </g>
+</svg>
