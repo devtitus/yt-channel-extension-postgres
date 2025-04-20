@@ -14,3 +14,6 @@ services:
     volumes:
       - ./backend:/app
       - /app/node_modules
+    # This enables host.docker.internal DNS name on Linux
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

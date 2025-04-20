@@ -71,6 +71,19 @@ A browser extension that finds YouTube channel IDs from YouTube video pages and 
    PGDATABASE=youtube_channels
    ```
 
+   All sensitive and environment-specific configuration is now managed via the `backend/.env` file.
+
+   **N8N webhook settings** (host, port, path, and full URL) must be set in `.env`:
+
+   ```
+   N8N_HOST=host.docker.internal
+   N8N_PORT=5678
+   N8N_PATH=/webhook/channel/process
+   N8N_WEBHOOK_URL=http://${N8N_HOST}:${N8N_PORT}${N8N_PATH}
+   ```
+
+   The backend will use these variables for all webhook calls.
+
 2. **Database Setup**
 
    Create the required table in your PostgreSQL database:
@@ -171,3 +184,7 @@ A browser extension that finds YouTube channel IDs from YouTube video pages and 
 
 - Keep your `.env` file secure and never commit it to public repositories
 - The extension communicates with a local API server, which is suitable for development but not for production use without additional security measures
+
+## Logging
+
+The backend now only logs essential information (such as database connection status and errors). Unnecessary log statements have been removed for a cleaner production output.

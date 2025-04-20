@@ -1,10 +1,14 @@
 const express = require('express');
 const { Pool } = require('pg');
 const cors = require('cors');
+const axios = require('axios');
 require('dotenv').config();
 
 const app = express();
 const port = 3000;
+
+// N8N webhook configuration from environment variables
+const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
 
 // Apply CORS middleware
 app.use(cors());
@@ -38,16 +42,16 @@ const pool = new Pool({
 // Test the database connection on startup
 pool.query('SELECT NOW()')
     .then(() => {
+        // Keeping this log since it's useful for confirming DB connection on startup
         console.log('Database connection successful');
     })
     .catch(err => {
         console.error('Database connection failed:', err.message);
     });
 
-// Add a health check endpoint
+// Health check endpoint
 app.get('/', async (req, res) => {
     try {
-        // Test the database connection
         const result = await pool.query('SELECT NOW() as time');
         res.json({
             status: 'ok',
@@ -63,7 +67,7 @@ app.get('/', async (req, res) => {
     }
 });
 
-// Ensure the table exists
+// Ensure table exists before handling /api/add-channel
 app.use(async (req, res, next) => {
     if (req.path === '/api/add-channel') {
         try {
@@ -85,6 +89,7 @@ app.use(async (req, res, next) => {
     }
 });
 
+// Add-channel endpoint with webhook trigger
 app.post('/api/add-channel', async (req, res) => {
     const { channelId } = req.body;
 
@@ -102,7 +107,43 @@ app.post('/api/add-channel', async (req, res) => {
             return res.status(200).json({ message: 'Channel ID already exists' });
         }
 
-        res.status(201).json({ message: 'Inserted', data: result.rows[0] });
+        // Trigger the n8n webhook
+        try {
+            const webhookResponse = await axios.post(n8nWebhookUrl, {
+                channel_id: channelId
+                // Add a secret here if needed for verification
+            });
+
+            res.status(201).json({
+                message: 'Inserted & webhook triggered successfully',
+                data: result.rows[0],
+                webhook: {
+                    status: webhookResponse.status,
+                    message: webhookResponse.statusText
+                }
+            });
+
+        } catch (webhookErr) {
+            console.error('Webhook error details:', {
+                message: webhookErr.message,
+                code: webhookErr.code,
+                response: webhookErr.response ? {
+                    status: webhookErr.response.status,
+                    statusText: webhookErr.response.statusText,
+                    data: webhookErr.response.data
+                } : 'No response'
+            });
+
+            // Send response with webhook error info but successful DB operation
+            res.status(201).json({
+                message: 'Inserted but webhook failed',
+                data: result.rows[0],
+                webhook: {
+                    error: webhookErr.message,
+                    code: webhookErr.code
+                }
+            });
+        }
     } catch (err) {
         console.error('Database error:', err.message);
         res.status(500).json({ error: 'Internal server error' });
